@@ -4,7 +4,7 @@ module Set7 where
 
 import Mooc.Todo
 import Data.List
-import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty (NonEmpty ((:|)), sortBy)
 import Data.Monoid
 import Data.Semigroup
 
@@ -26,11 +26,11 @@ data Velocity = Velocity Double
 
 -- velocity computes a velocity given a distance and a time
 velocity :: Distance -> Time -> Velocity
-velocity = todo
+velocity (Distance d) (Time t) = Velocity (d/t)
 
 -- travel computes a distance given a velocity and a time
 travel :: Velocity -> Time -> Distance
-travel = todo
+travel (Velocity v) (Time t) = Distance (v * t)
 
 ------------------------------------------------------------------------------
 -- Ex 2: let's implement a simple Set datatype. A Set is a list of
@@ -49,16 +49,23 @@ data Set a = Set [a]
 
 -- emptySet is a set with no elements
 emptySet :: Set a
-emptySet = todo
+emptySet = Set []
 
 -- member tests if an element is in a set
 member :: Eq a => a -> Set a -> Bool
-member = todo
+member mem (Set []) = False
+member mem (Set (x : xs)) = if mem == x then True else member mem (Set xs)
 
 -- add a member to a set
-add :: a -> Set a -> Set a
-add = todo
+add :: (Eq a, Ord a) => a -> Set a -> Set a
+add mem (Set a) = Set (insertValue mem a)
 
+insertValue :: Ord a => a -> [a] -> [a]
+insertValue x [] = [x]
+insertValue x (y:ys)
+  | x < y = x : y : ys
+  | x == y = y : ys
+  | otherwise = y : insertValue x ys
 ------------------------------------------------------------------------------
 -- Ex 3: a state machine for baking a cake. The type Event represents
 -- things that can happen while baking a cake. The type State is meant
@@ -92,10 +99,32 @@ add = todo
 data Event = AddEggs | AddFlour | AddSugar | Mix | Bake
   deriving (Eq,Show)
 
-data State = Start | Error | Finished
+data State = Start | Error | Finished | EggsStarted | NeedsSugar | NeedsFlour | ReadyToMix | ReadyToBake
   deriving (Eq,Show)
 
-step = todo
+step :: State -> Event -> State
+step state event  = case state of
+  Start -> case event of
+    AddEggs -> EggsStarted
+    _ -> Error
+  EggsStarted -> case event of
+    AddFlour -> NeedsSugar
+    AddSugar -> NeedsFlour
+    _ -> Error
+  NeedsSugar -> case event of
+    AddSugar -> ReadyToMix
+    _ -> Error
+  NeedsFlour -> case event of
+    AddFlour -> ReadyToMix
+    _ -> Error
+  ReadyToMix -> case event of
+    Mix -> ReadyToBake
+    _ -> Error
+  ReadyToBake -> case event of
+    Bake -> Finished
+    _ -> Error
+  Finished -> Finished
+  _ -> Error
 
 -- do not edit this
 bake :: [Event] -> State
@@ -115,7 +144,7 @@ bake events = go Start events
 --   average (1.0 :| [2.0,3.0])  ==>  2.0
 
 average :: Fractional a => NonEmpty a -> a
-average = todo
+average (x :| xs) = (x + sum xs ) / (fromIntegral $ length xs + 1)
 
 ------------------------------------------------------------------------------
 -- Ex 5: reverse a NonEmpty list.
@@ -123,7 +152,8 @@ average = todo
 -- PS. The Data.List.NonEmpty type has been imported for you
 
 reverseNonEmpty :: NonEmpty a -> NonEmpty a
-reverseNonEmpty = todo
+reverseNonEmpty (x :| xs) = case reverse (x : xs) of
+  y : ys -> y :| ys
 
 ------------------------------------------------------------------------------
 -- Ex 6: implement Semigroup instances for the Distance, Time and
@@ -135,6 +165,12 @@ reverseNonEmpty = todo
 -- velocity (Distance 50 <> Distance 10) (Time 1 <> Time 2)
 --    ==> Velocity 20
 
+instance Semigroup Distance where
+  (<>) (Distance x) (Distance y) = Distance (x + y)
+instance Semigroup Time where
+  (<>) (Time x) (Time y) = Time (x + y)
+instance Semigroup Velocity where
+  (<>) (Velocity x) (Velocity y) = Velocity (x + y)
 
 ------------------------------------------------------------------------------
 -- Ex 7: implement a Monoid instance for the Set type from exercise 2.
@@ -144,7 +180,11 @@ reverseNonEmpty = todo
 --
 -- What are the class constraints for the instances?
 
+instance Ord a => Semigroup (Set a) where
+  (<>) (Set x) (Set y) = foldr add (Set x) y
 
+instance Ord a => Monoid (Set a) where
+  mempty = emptySet
 ------------------------------------------------------------------------------
 -- Ex 8: below you'll find two different ways of representing
 -- calculator operations. The type Operation1 is a closed abstraction,
@@ -166,29 +206,42 @@ reverseNonEmpty = todo
 
 data Operation1 = Add1 Int Int
                 | Subtract1 Int Int
+                | Multiply1 Int Int
   deriving Show
 
 compute1 :: Operation1 -> Int
 compute1 (Add1 i j) = i+j
 compute1 (Subtract1 i j) = i-j
+compute1 (Multiply1 i j) = i * j
 
 show1 :: Operation1 -> String
-show1 = todo
+show1 op = case op of
+  Add1 x y -> show x ++ "+" ++ show y
+  Subtract1 x y -> show x ++ "-" ++ show y
+  Multiply1 x y -> show x ++ "*" ++ show y
 
 data Add2 = Add2 Int Int
   deriving Show
 data Subtract2 = Subtract2 Int Int
   deriving Show
 
+data Multiply2 = Multiply2 Int Int
+
 class Operation2 op where
   compute2 :: op -> Int
+  show2 :: op -> String
 
 instance Operation2 Add2 where
   compute2 (Add2 i j) = i+j
+  show2 (Add2 i j) = show i ++ "+" ++ show j
 
 instance Operation2 Subtract2 where
   compute2 (Subtract2 i j) = i-j
+  show2 (Subtract2 i j) = show i ++ "-" ++ show j
 
+instance Operation2 Multiply2 where
+  compute2 (Multiply2 i j) = i * j
+  show2 (Multiply2 i j) = show i ++ "*" ++ show j
 
 ------------------------------------------------------------------------------
 -- Ex 9: validating passwords. Below you'll find a type
@@ -217,7 +270,19 @@ data PasswordRequirement =
   deriving Show
 
 passwordAllowed :: String -> PasswordRequirement -> Bool
-passwordAllowed = todo
+passwordAllowed password requirements = case requirements of
+  MinimumLength x -> length password >= x
+  ContainsSome xs -> checkPassword xs password
+  DoesNotContain xs -> checkPassword xs password == False
+  And x y -> passwordAllowed password x && passwordAllowed password y
+  Or x y -> passwordAllowed password x || passwordAllowed password y
+
+checkPassword :: [Char] -> String -> Bool
+checkPassword [] password = False
+checkPassword (x:xs) password = if checkLetter x password then True else checkPassword xs password
+checkLetter :: Char -> [Char] -> Bool
+checkLetter chr [] = False
+checkLetter chr (x:xs) = if chr == x then True else checkLetter chr xs
 
 ------------------------------------------------------------------------------
 -- Ex 10: a DSL for simple arithmetic expressions with addition and
@@ -239,17 +304,43 @@ passwordAllowed = todo
 --     ==> "(3*(1+1))"
 --
 
-data Arithmetic = Todo
+data Arithmetic = Literal Integer | Operation String Arithmetic Arithmetic
   deriving Show
 
 literal :: Integer -> Arithmetic
-literal = todo
+literal x = Literal x
 
 operation :: String -> Arithmetic -> Arithmetic -> Arithmetic
-operation = todo
+operation x y z = Operation x y z
+
 
 evaluate :: Arithmetic -> Integer
-evaluate = todo
+evaluate (Literal x) = x
+evaluate (Operation x y z) =
+  case y of
+    Literal a -> case z of
+      Literal b -> case x of
+        "+" -> a + b
+        "*" -> a * b
+      Operation b c d -> case x of
+        "+" -> a + evaluate (Operation b c d)
+        "*" -> a * evaluate (Operation b c d)
+    Operation a b c -> case z of
+      Literal e -> case x of
+        "+" -> e + evaluate (Operation a b c)
+        "*" -> e * evaluate (Operation a b c)
+      Operation e f g -> case x of
+        "+" -> evaluate (Operation a b c) + evaluate (Operation e f g)
+        "*" -> evaluate (Operation a b c) * evaluate (Operation e f g)
+  
 
 render :: Arithmetic -> String
-render = todo
+render (Literal x) = show x
+render (Operation x y z) =
+  case y of
+    Literal a -> case z of
+      Literal b -> "(" ++ show a ++ x ++ show b ++ ")"
+      Operation b c d -> "(" ++ show a ++ x ++ render (Operation b c d) ++ ")"
+    Operation a b c -> case z of
+      Literal e -> "(" ++ render (Operation a b c) ++ x ++ show e ++ ")"
+      Operation e f g -> "(" ++ render (Operation a b c) ++ x ++ render (Operation e f g) ++ ")"

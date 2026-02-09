@@ -47,10 +47,10 @@ type Col   = Int
 type Coord = (Row, Col)
 
 nextRow :: Coord -> Coord
-nextRow (i,j) = todo
+nextRow (i,j) = (i+1, 1)
 
 nextCol :: Coord -> Coord
-nextCol (i,j) = todo
+nextCol (i,j) = (i, j+1)
 
 --------------------------------------------------------------------------------
 -- Ex 2: Implement the function prettyPrint that, given the size of
@@ -103,7 +103,17 @@ nextCol (i,j) = todo
 type Size = Int
 
 prettyPrint :: Size -> [Coord] -> String
-prettyPrint = todo
+prettyPrint n xs = prettyPrint' n (sort xs) (1,1)
+prettyPrint' :: Size -> [Coord] -> Coord -> String
+prettyPrint' n [] x = prettyPrint' n [(0,0)] x
+prettyPrint' n (x:xs) (crntRow, crntCol)    | crntRow < n && crntCol < n && (crntRow,crntCol) == x = 'Q' : prettyPrint' n xs (nextCol (crntRow,crntCol))
+                                            | crntRow < n && crntCol < n = '.' : prettyPrint' n (x:xs) (nextCol (crntRow,crntCol))
+                                            | crntRow < n && crntCol == n && (crntRow,crntCol) == x = 'Q' : '\n' : prettyPrint' n xs (nextRow (crntRow,crntCol))
+                                            | crntRow < n && crntCol == n = '.' : '\n' : prettyPrint' n (x:xs) (nextRow (crntRow,crntCol))
+                                            | crntRow == n && crntCol < n && (crntRow,crntCol) == x = 'Q' : prettyPrint' n xs (nextCol (crntRow,crntCol))
+                                            | crntRow == n && crntCol < n = '.' : prettyPrint' n (x:xs) (nextCol (crntRow,crntCol))
+                                            | crntRow == n && crntCol == n && (crntRow,crntCol) == x = ['Q','\n']
+                                            | crntRow == n && crntCol == n = ['.','\n']
 
 --------------------------------------------------------------------------------
 -- Ex 3: The task in this exercise is to define the relations sameRow, sameCol,
@@ -127,16 +137,16 @@ prettyPrint = todo
 --   sameAntidiag (500,5) (5,500) ==> True
 
 sameRow :: Coord -> Coord -> Bool
-sameRow (i,j) (k,l) = todo
+sameRow (i,_) (k,_) = i == k
 
 sameCol :: Coord -> Coord -> Bool
-sameCol (i,j) (k,l) = todo
+sameCol (_,j) (_,l) = j == l
 
 sameDiag :: Coord -> Coord -> Bool
-sameDiag (i,j) (k,l) = todo
+sameDiag (i,j) (k,l) = (i - j) == (k - l)
 
 sameAntidiag :: Coord -> Coord -> Bool
-sameAntidiag (i,j) (k,l) = todo
+sameAntidiag (i,j) (k,l) = (i + j) == (k + l)
 
 --------------------------------------------------------------------------------
 -- Ex 4: In chess, a queen may capture another piece in the same row, column,
@@ -191,7 +201,8 @@ type Candidate = Coord
 type Stack     = [Coord]
 
 danger :: Candidate -> Stack -> Bool
-danger = todo
+danger _ [] = False
+danger coord (q:qs) = if sameRow coord q || sameCol coord q || sameDiag coord q || sameAntidiag coord q then True else danger coord qs
 
 --------------------------------------------------------------------------------
 -- Ex 5: In this exercise, the task is to write a modified version of
@@ -226,8 +237,22 @@ danger = todo
 -- solution to this version. Any working solution is okay in this exercise.)
 
 prettyPrint2 :: Size -> Stack -> String
-prettyPrint2 = todo
+prettyPrint2 n xs = prettyPrint2' n (1,1) (sort xs) xs
+prettyPrint2' :: Size -> Coord -> Stack -> Stack -> String
+prettyPrint2' n (r,c) [] qs =
+    case (r,c) of
+        _   | r == n && c == n -> [prettyPrint2Helper (r,c) qs, '\n']
+            | r <= n && c == n -> prettyPrint2Helper (r,c) qs : '\n' : prettyPrint2' n (nextRow (r,c)) [] qs
+            | r <= n && c < n  -> prettyPrint2Helper (r,c) qs : prettyPrint2' n (nextCol (r,c)) [] qs
+prettyPrint2' n (r,c) (x:xs) qs | r == n && c == n && (r,c)  == x = "Q\n"
+                                | r <= n && c == n && (r,c)  == x = 'Q' : '\n' : prettyPrint2' n (nextRow (r,c)) xs qs
+                                | r <= n && c < n && (r,c)  == x = 'Q' : prettyPrint2' n (nextCol (r,c)) xs qs
 
+                                | r == n && c == n = [prettyPrint2Helper (r,c) qs, '\n']
+                                | r <= n && c == n = prettyPrint2Helper (r,c) qs : '\n' : prettyPrint2' n (nextRow (r,c)) (x:xs) qs
+                                | r <= n && c < n = prettyPrint2Helper (r,c) qs : prettyPrint2' n (nextCol (r,c)) (x:xs) qs
+prettyPrint2Helper :: Coord -> Stack -> Char
+prettyPrint2Helper (r,c) qs = if danger (r,c) qs then '#' else '.'
 --------------------------------------------------------------------------------
 -- Ex 6: Now that we can check if a piece can be safely placed into a square in
 -- the chessboard, it's time to write the first piece of the actual solution.
@@ -271,7 +296,11 @@ prettyPrint2 = todo
 --     Q#######
 
 fixFirst :: Size -> Stack -> Maybe Stack
-fixFirst n s = todo
+fixFirst _ [] = Just []
+fixFirst n (q@(r,c):ss)
+    | c > n            = Nothing
+    | danger q ss      = fixFirst n (nextCol q : ss)
+    | otherwise        = Just (q:ss)
 
 --------------------------------------------------------------------------------
 -- Ex 7: We need two helper functions for stack management.
@@ -293,10 +322,12 @@ fixFirst n s = todo
 -- Hint: Remember nextRow and nextCol? Use them!
 
 continue :: Stack -> Stack
-continue s = todo
+continue [] = []
+continue (s:xs) = nextRow s : s : xs
 
 backtrack :: Stack -> Stack
-backtrack s = todo
+backtrack (s:x:xs) = nextCol x : xs
+backtrack _ = []
 
 --------------------------------------------------------------------------------
 -- Ex 8: Let's take a step. Our algorithm solves the problem (in a
@@ -365,7 +396,9 @@ backtrack s = todo
 --     step 8 [(6,1),(5,4),(4,2),(3,5),(2,3),(1,1)] ==> [(5,5),(4,2),(3,5),(2,3),(1,1)]
 
 step :: Size -> Stack -> Stack
-step = todo
+step n xs = case fixFirst n xs of
+    Nothing -> backtrack xs
+    Just y -> continue y
 
 --------------------------------------------------------------------------------
 -- Ex 9: Let's solve our puzzle! The function finish takes a partial
@@ -380,7 +413,7 @@ step = todo
 -- solve the n queens problem.
 
 finish :: Size -> Stack -> Stack
-finish = todo
+finish n xs = if length xs == n + 1 then tail xs else finish n (step n xs)
 
 solve :: Size -> Stack
 solve n = finish n [(1,1)]
